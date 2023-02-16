@@ -1,302 +1,281 @@
 #include "raylib.h"
+#include <cstddef>
+#include <cstdlib>
+#include <cstdio>
 #include <iostream>
-class camera {
-	
-public:
-	static camera* get_instance(){
-		if(instance == nullptr){
-			instance = new camera();
-		}
-		return instance;
-	};
-	camera(){
-		
-	};
-	~camera(){
-		
-	};
-	int 绝对坐标x;
-	int 绝对坐标y;
-	int width;
-	int height;
+
+class Node {
 private:
-	static camera* instance;
-};
-camera* camera::instance;
-
-class node {
-
+	// 节点位置
+	Vector2 m_size;
+	Vector2 m_vPosition;
+	// 节点锚点
+	//Vector2 m_vAnchor;
+	// 节点父节点
+	Node* m_pParent;
+	// 节点子节点列表
+	Node* m_pChildren[10];
+	// 节点子节点数量
+	int m_iChildCount;
+	// 节点事件监听器列表
+	void (*m_pEventListeners[10])(void);
+	// 节点事件监听器数量
+	int m_iEventListenerCount;
+	// 节点鼠标禁止穿透
+	bool m_bMouseBlock;
+	// 节点是否被点击过
+	bool m_bClicked;
+	
 public:
-	node* parent;
-	node* children_list[1500];
-	int children_list_size;
-	int curr_zindex;
-	int target_zindex;
-	Vector2 相对坐标;
-	Vector2 锚点坐标;
-	Vector2 绝对坐标;
-	Texture2D 纹理;
-	Rectangle 帧信息;
-	Rectangle 包围盒;
-	node(){
-		this->curr_zindex = -1;
-		this->target_zindex = -1;
-		this->children_list_size = 0;
-		this->相对坐标.x = 0;
-		this->相对坐标.y = 0;
-		this->绝对坐标.x = 0;
-		this->绝对坐标.y = 0;
-		this->锚点坐标.x = 0;
-		this->锚点坐标.y = 0;
-		this->parent = nullptr;
-	};
-	~node(){
+	// 构造函数
+	Node() {
+		m_size.x = GetScreenWidth();
+		m_size.y = GetScreenHeight();
+		m_vPosition = {0, 0};
+		//m_vAnchor = {0, 0};
+		m_pParent = NULL;
+		m_iChildCount = 0;
+		m_iEventListenerCount = 0;
+		m_bMouseBlock = false;
+		m_bClicked = false;
+	}
+	
+	virtual ~Node() {}
+	// 设置节点位置
+	void SetPosition(Vector2 vPosition) {
+		m_vPosition = vPosition;
+	}
+	
+	void SetSize(int w, int h){
+		if(w<1){
+			w = 1;
+		};
+		if(h<1){
+			h = 1;
+		};
+		m_size.x = w;
+		m_size.y = h;
 		
-	};
-	void set_zindex(int z){
-		if(this->parent == NULL){
-			if(z<0){
-				this->target_zindex = 0;
-			}else{
-				this->target_zindex = z;
-			}
-			
-		}else{//有父节点
-			//z为目标位置
-			if(z<0){
-				z = 0;
-			}else if(z>this->parent->children_list_size-1){
-				z = this->parent->children_list_size-1;
-			}
-			
-			if(z == this->curr_zindex){//目标zindex和原有zindex相同
-				return;
-			}else if(z > this->curr_zindex){//目标zindex大于原有zindex
-				node* tmp_node = this;
-				for(int i = this->curr_zindex ; i <= z;i++){
-					this->parent->children_list[i] = this->parent->children_list[i+1];
-					this->parent->children_list[i]->curr_zindex--;
-				}
-				this->parent->children_list[z] = tmp_node;
-				this->curr_zindex = z;
-			}else if(z < this->curr_zindex){
-				node* tmp_node = this;
-				for(int i = this->curr_zindex;i >= z;i--){
-					this->parent->children_list[i] = this->parent->children_list[i-1];
-					this->parent->children_list[i]++;
-				}
-				this->parent->children_list[z] = tmp_node;
-				this->curr_zindex = z;
-			}
+	}
+	
+	Vector2 GetSize(){
+		return m_size;
+	}
+	// 获取节点位置
+	Vector2 GetPosition() {
+		return m_vPosition;
+	}
+	
+	// 设置节点锚点
+//	void SetAnchor(Vector2 vAnchor) {
+//		m_vAnchor = vAnchor;
+//	}
+	
+	// 获取节点锚点
+//	Vector2 GetAnchor() {
+//		return m_vAnchor;
+//	}
+	// 设置节点父节点
+	void SetParent(Node* pParent) {
+		m_pParent = pParent;
+	}
+	
+	// 获取节点父节点
+	Node* GetParent() {
+		return m_pParent;
+	}
+	
+	// 添加节点子节点
+	void AddChild(Node* pChild) {
+		if (m_iChildCount < 10) {
+			m_pChildren[m_iChildCount] = pChild;
+			pChild->SetParent(this);
+			m_iChildCount++;
 		}
-	};
-	void swap_zindex(node* 目标节点){
-		if(this->parent == NULL){
-			std::cout<<"---->node::swap_zindex, this node has not parent"<<"\n";
-			return;
-		}else if(目标节点->parent == NULL){
-			std::cout<<"---->node::swap_zindex, target node has not parent"<<"\n";
-			return;
-		}else if(目标节点->parent != this->parent){
-			std::cout<<"---->node::swap_zindex, this parent != target parent"<<"\n";
-			return;
+	}
+	// 获取节点子节点
+	Node* GetChild(int iIndex) {
+		if (iIndex >= 0 && iIndex < m_iChildCount) {
+			return m_pChildren[iIndex];
 		}
-		else{
-			node* tmp_node = this;
-			int tmp_zindex = this->curr_zindex;
-			this->parent->children_list[tmp_zindex] = 目标节点;
-			this->parent->children_list[tmp_zindex]->curr_zindex = tmp_zindex;
-			
-			this->parent->children_list[目标节点->curr_zindex] = tmp_node;
-			this->parent->children_list[目标节点->curr_zindex]->curr_zindex = tmp_node->curr_zindex;
+		else {
+			return NULL;
 		}
-	};
-	int get_zindex(){
-		return this->curr_zindex;	
-	};
-	void set_position(int x, int y){
-		this->相对坐标.x = x;
-		this->相对坐标.y = y;
-	};
-	int get_position_x(){
-		return this->相对坐标.x;	
-	};
-	int get_position_y(){
-		return this->相对坐标.y;	
-	};
-	void set_anchor(int x, int y){
-		this->锚点坐标.x = x;
-		this->锚点坐标.y = y;
-	};
-	int get_anchor_x(){
-		return this->锚点坐标.x;
-	};
-	int get_anchor_y(){
-		return this->锚点坐标.y;
-	};
-	int get_width(){
-		return this->包围盒.width;
-	};
-	int get_height(){
-		return this->包围盒.height;
-	};
-	void add_child(node* 子节点){
-		if(子节点->parent != NULL){
-			std::cout<<"---->node::add_child, this son node has a parent"<<"\n";
-			return;
-		}else if(1){
-			//忘记了另外一种判断
+	}
+	
+	// 获取节点子节点数量
+	int GetChildCount() {
+		return m_iChildCount;
+	}
+	// 添加节点事件监听器
+	void AddEventListener(void (*pEventListener)(void)) {
+		if (m_iEventListenerCount < 10) {
+			m_pEventListeners[m_iEventListenerCount] = pEventListener;
+			m_iEventListenerCount++;
 		}
-		if(子节点->target_zindex != -1){//在addchild之前 就已经使用了set_zindex;
-			//TODO
-			if(子节点->target_zindex >= this->children_list_size){
-				this->children_list[this->children_list_size] = 子节点;
-				子节点->curr_zindex = this->children_list_size;
-				子节点->target_zindex = -1;
-			}else{
-				for(int i = this->children_list_size-1;i >= 子节点->target_zindex; i--){
-					this->children_list[i+1] = this->children_list[i];
-				}
-				this->children_list[子节点->target_zindex] = 子节点;
-				子节点->curr_zindex = 子节点->target_zindex;
-				子节点->target_zindex = -1;
-			}
-			this->children_list_size++;
-		}else{//在addchild之前 未使用set_zindex
-			this->children_list[this->children_list_size] = 子节点;
-			子节点->curr_zindex = this->children_list_size;
-			子节点->target_zindex = -1;
-			this->children_list_size++;
+	}
+	
+	// 获取节点事件监听器
+	void (*GetEventListener(int iIndex))(void) {
+		if (iIndex >= 0 && iIndex < m_iEventListenerCount) {
+			return m_pEventListeners[iIndex];
 		}
-	};
-	void remove_child(node* 子节点){
-		if(子节点->parent == NULL){
-			std::cout<<"---->node::remove_child, this son node has not a parent"<<"\n";
-			return;
+		else {
+			return NULL;
 		}
-		for(int i = 子节点->curr_zindex;i <= this->children_list_size-1;i++){
-			this->children_list[i] = this->children_list[i+1];
-		}
-		this->children_list_size--;
-		子节点->curr_zindex = -1;
-		子节点->target_zindex = -1;
-		//需要补需要考虑释放 子节点的内存啥的 比如释放纹理内存.
-	};
-	void remove_frome_parent(node* 父节点){
-		if(this->parent!=父节点){
-			std::cout<<"---->node::remove_frome_parent, this node parent != param 1"<<"\n";
-			return;
-		}else if(this->parent == NULL){
-			std::cout<<"---->node::remove_frome_parent,this node has not parent"<<"\n";
-			return;
-		}
-		for(int i = this->curr_zindex;i <= 父节点->children_list_size-1;i++){
-			父节点->children_list[i] = 父节点->children_list[i+1];
-		}
-		父节点->children_list_size--;
-		this->curr_zindex = -1;
-		this->target_zindex = -1;
-		//需要补需要考虑释放 子节点的内存啥的 比如释放纹理内存.
-	};
-	void set_texture(const char* file_name){
-		
-	};
-	void set_texture_frome_spritesheet(const char* png_name, const char* conf_name,const char* ele_name){
-		
-	};
-	virtual void update(){
-		
-	};
-	virtual void update_position(int psx_and_ax, int psx_and_ay){
-		this->绝对坐标.x = psx_and_ax + this->相对坐标.x - this->锚点坐标.x;
-		this->绝对坐标.y = psx_and_ay + this->相对坐标.y - this->锚点坐标.y;
-		for(int i=0;i<this->children_list_size;i++){
-			//children_list[i]->坐标是否更改 这里是否需要设置? 锚点更改是否需要更改子节点?
-			this->children_list[i]->update_position(this->绝对坐标.x+this->锚点坐标.x,this->绝对坐标.y+this->锚点坐标.y);
-		}
-	};
-	virtual void draw(){
-		DrawTextureRec(this->纹理,this->帧信息,this->绝对坐标,WHITE);
-		for(int i=0;i<this->children_list_size;i++){
-			this->children_list[i]->draw();
-		}
-	};
+	}
+	// 获取节点事件监听器数量
+	int GetEventListenerCount() {
+		return m_iEventListenerCount;
+	}
+	
+	// 设置节点鼠标禁止穿透
+	void SetMouseBlock(bool bMouseBlock) {
+		m_bMouseBlock = bMouseBlock;
+	}
+	
+	// 获取节点鼠标禁止穿透
+	bool GetMouseBlock() {
+		return m_bMouseBlock;
+	}
 
+	// 设置节点是否被点击过
+	void SetClicked(bool bClicked) {
+		m_bClicked = bClicked;
+	}
+	
+	// 获取节点是否被点击过
+	bool GetClicked() {
+		return m_bClicked;
+	}
+	
+	void Update() {
+		// 如果节点没有被点击过，才进行事件分发
+		if (!m_bClicked) {
+			// 获取鼠标位置
+			Vector2 vMousePosition = GetMousePosition();
+			Vector2 mNodeSize = GetSize();
+			Vector2 mNodePos = GetPosition();
+			// 判断鼠标是否在节点范围内
+			if (vMousePosition.x>=mNodePos.x&&vMousePosition.y>=mNodePos.y&&vMousePosition.x<=mNodePos.x+mNodeSize.x &&vMousePosition.y<=mNodePos.y+mNodeSize.y) {
+				// 遍历所有事件监听器，执行回调函数
+				for (int i = 0; i < m_iEventListenerCount; i++) {
+					(*m_pEventListeners[i])();
+				}
+				// 如果鼠标左键按下，设置节点为已点击状态
+				if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+					SetClicked(true);
+				}
+			}
+		}
+		else {
+			// 如果鼠标左键释放，设置节点为未点击状态
+			if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) {
+				SetClicked(false);
+			}
+		}
+		
+		// 更新所有子节点状态
+		for (int i = 0; i < m_iChildCount; i++) {
+			m_pChildren[i]->Update();
+		}
+	}
+	
+	// 渲染节点
+	void Render() {
+		// 渲染自身
+		DrawSelf();
+		// 渲染所有子节点
+		for (int i = 0; i < m_iChildCount; i++) {
+			m_pChildren[i]->Render();
+		}
+	}
+	
+	// 绘制自身（虚函数，由子类实现）
+	virtual void DrawSelf() = 0;
 };
 
-class stage {
-	int YourVar;
+// 定义一个继承自Node的子类，实现DrawSelf方法
+class Button : public Node {
 private:
-	static stage* instance;
+	// 按钮颜色
+	Color m_cColor;
+	// 按钮文字
+	const char* m_sText;
+	
 public:
-	node* 当前场景;
-	Vector2 相对坐标;
-	Vector2 绝对坐标;
-	stage(){
-		相对坐标.x = 0;
-		相对坐标.y = 0;
-		绝对坐标.x = 0;
-		绝对坐标.y = 0;
-		//创建当前场景
-		camera::get_instance()->绝对坐标x = 0;
-		camera::get_instance()->绝对坐标y = 0;
-		this->init();	
-	};
-	~stage(){
-
-	};
-	static stage* get_instance(){
-		if(instance == nullptr){
-			instance = new stage();
-		}
-		return instance;
-	};
+	// 构造函数
+	Button(Color cColor, const char* sText) {
+		m_cColor = cColor;
+		m_sText = sText;
+	}
 	
-	void init(){
-		
-	};
-	void update(){
-		
-	};
-	
-	void update_position(){
-		当前场景->update_position(绝对坐标.x-camera::get_instance()->绝对坐标x,绝对坐标.y-camera::get_instance()->绝对坐标y);
-	};
-	void draw(){
-		当前场景->draw();
-	};
-
+	// 绘制自身
+	void DrawSelf() override {
+		// 获取节点位置和锚点
+		Vector2 vPosition = GetPosition();
+		Vector2 mSize = GetSize();
+		//Vector2 vAnchor = GetAnchor();
+		// 绘制一个矩形作为按钮背景
+		DrawRectangle(vPosition.x,vPosition.y,mSize.x,mSize.y,m_cColor);//需要宽度和高度
+		// 绘制按钮文字
+		DrawText(m_sText, GetScreenWidth() / 2 - MeasureText(m_sText, 20) / 2, GetScreenHeight() / 2 - 10, 20, BLACK);
+	}
 };
-stage* stage::instance;
 
-int main(void)
-{
-	// Initialization
-	//--------------------------------------------------------------------------------------
-	const int screenWidth = 800;
-	const int screenHeight = 450;
+// 定义一个回调函数，用于打印鼠标点击事件
+void OnClick() {
+	std::cout<<"asdasdasdasd";
+	printf("You clicked the button!\n");
+}
+
+void OnClick1() {
+	std::cout<<"123123123";
+	printf("You 123123123ton!\n");
+}
+
+// 在主函数中创建一个Button对象，并添加鼠标事件监听器
+int main() {
+	// 初始化窗口和绘图环境
+	InitWindow(800, 600, "Example");
+	SetTargetFPS(60);
 	
-	InitWindow(screenWidth, screenHeight, "demo");
-	InitAudioDevice();
-	SetTargetFPS(120);
-	SetTraceLogLevel(LOG_WARNING);
+	// 创建一个Button对象，设置位置、锚点和颜色等属性
+	Button* pButton = new Button(LIGHTGRAY, "Click Me");
+	Button* b2 = new Button(BLACK, "bt");
+	b2->SetSize(100,50);
+	b2->AddEventListener(&OnClick1);
+	b2->SetPosition({120.0f,120.0f});
+	b2->SetMouseBlock(false);
 	
+	pButton->AddChild(b2);
+	pButton->SetSize(100,100);
+	pButton->SetPosition({100.0f, 100.0f});
+	//pButton->SetAnchor({200.0f, 100.0f});
+	pButton->SetMouseBlock(true);
+	// 添加鼠标事件监听器，传入回调函数的指针
+	pButton->AddEventListener(&OnClick);
 	
-	while (!WindowShouldClose())    // Detect window close button or ESC key
-	{
+	// 主循环
+	while (!WindowShouldClose()) {
+		// 更新节点状态
+		pButton->Update();
 		
+		// 开始绘制
 		BeginDrawing();
-		stage::get_instance()->update_position();
-		stage::get_instance()->update();
-		stage::get_instance()->draw();
 		ClearBackground(RAYWHITE);
 		
-		//DrawText("Click to explode!", 440, 400, 40, DARKGRAY);
+		// 渲染节点
+		pButton->Render();
 		
+		// 结束绘制
 		EndDrawing();
-		//----------------------------------------------------------------------------------
 	}
-	CloseAudioDevice();
-	CloseWindow();              // Close window and OpenGL context
+	
+	// 释放资源和关闭窗口
+	delete pButton;
+	CloseWindow();
+	
 	return 0;
 }
+	
