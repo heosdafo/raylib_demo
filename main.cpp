@@ -1,281 +1,153 @@
-#include "raylib.h"
-#include <cstddef>
-#include <cstdlib>
-#include <cstdio>
+#include <raylib.h>
+#include <vector>
 #include <iostream>
+#define NUM_FRAMES_PER_LINE     5
+#define NUM_LINES               5
 
-class Node {
-private:
-	// 节点位置
-	Vector2 m_size;
-	Vector2 m_vPosition;
-	// 节点锚点
-	//Vector2 m_vAnchor;
-	// 节点父节点
-	Node* m_pParent;
-	// 节点子节点列表
-	Node* m_pChildren[10];
-	// 节点子节点数量
-	int m_iChildCount;
-	// 节点事件监听器列表
-	void (*m_pEventListeners[10])(void);
-	// 节点事件监听器数量
-	int m_iEventListenerCount;
-	// 节点鼠标禁止穿透
-	bool m_bMouseBlock;
-	// 节点是否被点击过
-	bool m_bClicked;
+
+
+
+struct 事件穿透记录参数 {
+	int node_conf[10][4] ;//记录每个禁止穿透的节点的xy坐标点,以及长度和宽度
+	int 数组当前行;
+	bool 是否到达最上层节点;//这个变量作为标记使用,只在游戏屏幕中最上层节点执行event函数时才将其设置为true;
 	
+};
+class node {
 public:
-	// 构造函数
-	Node() {
-		m_size.x = GetScreenWidth();
-		m_size.y = GetScreenHeight();
-		m_vPosition = {0, 0};
-		//m_vAnchor = {0, 0};
-		m_pParent = NULL;
-		m_iChildCount = 0;
-		m_iEventListenerCount = 0;
-		m_bMouseBlock = false;
-		m_bClicked = false;
+	node(int x, int y) {
+		size.height = 100;
+		size.width = 100;
+		size.x = x;
+		size.y = y;
+		m_pos.x = x;
+		m_pos.y = y;
+		m_color = RED;
+		是否穿透 = true;
+		children_list.clear();
 	}
-	
-	virtual ~Node() {}
-	// 设置节点位置
-	void SetPosition(Vector2 vPosition) {
-		m_vPosition = vPosition;
-	}
-	
-	void SetSize(int w, int h){
-		if(w<1){
-			w = 1;
-		};
-		if(h<1){
-			h = 1;
-		};
-		m_size.x = w;
-		m_size.y = h;
-		
-	}
-	
-	Vector2 GetSize(){
-		return m_size;
-	}
-	// 获取节点位置
-	Vector2 GetPosition() {
-		return m_vPosition;
-	}
-	
-	// 设置节点锚点
-//	void SetAnchor(Vector2 vAnchor) {
-//		m_vAnchor = vAnchor;
-//	}
-	
-	// 获取节点锚点
-//	Vector2 GetAnchor() {
-//		return m_vAnchor;
-//	}
-	// 设置节点父节点
-	void SetParent(Node* pParent) {
-		m_pParent = pParent;
-	}
-	
-	// 获取节点父节点
-	Node* GetParent() {
-		return m_pParent;
-	}
-	
-	// 添加节点子节点
-	void AddChild(Node* pChild) {
-		if (m_iChildCount < 10) {
-			m_pChildren[m_iChildCount] = pChild;
-			pChild->SetParent(this);
-			m_iChildCount++;
-		}
-	}
-	// 获取节点子节点
-	Node* GetChild(int iIndex) {
-		if (iIndex >= 0 && iIndex < m_iChildCount) {
-			return m_pChildren[iIndex];
-		}
-		else {
-			return NULL;
-		}
-	}
-	
-	// 获取节点子节点数量
-	int GetChildCount() {
-		return m_iChildCount;
-	}
-	// 添加节点事件监听器
-	void AddEventListener(void (*pEventListener)(void)) {
-		if (m_iEventListenerCount < 10) {
-			m_pEventListeners[m_iEventListenerCount] = pEventListener;
-			m_iEventListenerCount++;
-		}
-	}
-	
-	// 获取节点事件监听器
-	void (*GetEventListener(int iIndex))(void) {
-		if (iIndex >= 0 && iIndex < m_iEventListenerCount) {
-			return m_pEventListeners[iIndex];
-		}
-		else {
-			return NULL;
-		}
-	}
-	// 获取节点事件监听器数量
-	int GetEventListenerCount() {
-		return m_iEventListenerCount;
-	}
-	
-	// 设置节点鼠标禁止穿透
-	void SetMouseBlock(bool bMouseBlock) {
-		m_bMouseBlock = bMouseBlock;
-	}
-	
-	// 获取节点鼠标禁止穿透
-	bool GetMouseBlock() {
-		return m_bMouseBlock;
-	}
+	std::vector<node*> children_list;
+	bool 是否穿透;
+	bool 是否响应事件;
+	Rectangle size;
+	Vector2 m_pos;
+	const char* name;
 
-	// 设置节点是否被点击过
-	void SetClicked(bool bClicked) {
-		m_bClicked = bClicked;
+	Color m_color;
+	void set_color(Color c) {
+		m_color = c;
 	}
-	
-	// 获取节点是否被点击过
-	bool GetClicked() {
-		return m_bClicked;
+	void addchild(node* son_node) {
+		children_list.push_back(son_node);
 	}
-	
-	void Update() {
-		// 如果节点没有被点击过，才进行事件分发
-		if (!m_bClicked) {
-			// 获取鼠标位置
-			Vector2 vMousePosition = GetMousePosition();
-			Vector2 mNodeSize = GetSize();
-			Vector2 mNodePos = GetPosition();
-			// 判断鼠标是否在节点范围内
-			if (vMousePosition.x>=mNodePos.x&&vMousePosition.y>=mNodePos.y&&vMousePosition.x<=mNodePos.x+mNodeSize.x &&vMousePosition.y<=mNodePos.y+mNodeSize.y) {
-				// 遍历所有事件监听器，执行回调函数
-				for (int i = 0; i < m_iEventListenerCount; i++) {
-					(*m_pEventListeners[i])();
+	void event(事件穿透记录参数 &参数1){
+		
+
+		for (auto it = children_list.rbegin(); it != children_list.rend(); ++it) {
+			(*it)->event(参数1);
+		}
+		if(参数1.是否到达最上层节点 == false){//这条判断中是否到达最上层节点原始值是false,但在游戏屏幕中最上层节点触发event函数后,将会被设置为true,其作用是为了判断被点击的节点是否为游戏屏幕中最上层的节点.
+			Vector2 当前鼠标坐标 = GetMousePosition();
+			if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON)){
+				if (CheckCollisionPointRec(当前鼠标坐标, size)) 
+				{
+					std::cout<<"----> is in first node inside\n";
 				}
-				// 如果鼠标左键按下，设置节点为已点击状态
-				if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-					SetClicked(true);
+			}
+			参数1.是否到达最上层节点 = true;//在游戏屏幕中最上层节点执行完event函数之前,会将这个变量设置为true
+		}else{
+			Vector2 当前鼠标坐标 = GetMousePosition();
+			if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON)){
+				if (CheckCollisionPointRec(当前鼠标坐标, size)) 
+				{
+					bool 是否在重叠位置 = false;
+					for(int i=0;i<参数1.数组当前行;i++){
+						Rectangle tmp_size;
+						tmp_size.x = 参数1.node_conf[i][0];
+						tmp_size.y = 参数1.node_conf[i][1];
+						tmp_size.width = 参数1.node_conf[i][2];
+						tmp_size.height = 参数1.node_conf[i][3];
+						if(CheckCollisionPointRec(当前鼠标坐标, tmp_size)){
+							是否在重叠位置 = true;
+							break;
+						}else{
+							是否在重叠位置 = false;
+						}
+					}
+					if(是否在重叠位置 == false){
+						std::cout<<"--->"<<name<<"\n";
+					}
 				}
 			}
 		}
-		else {
-			// 如果鼠标左键释放，设置节点为未点击状态
-			if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) {
-				SetClicked(false);
-			}
+		if(是否穿透 == false){
+			参数1.node_conf[参数1.数组当前行][0] = size.x;
+			参数1.node_conf[参数1.数组当前行][1] = size.y;
+			参数1.node_conf[参数1.数组当前行][2] = size.width;
+			参数1.node_conf[参数1.数组当前行][3] = size.height;
+			参数1.数组当前行++;
+			
 		}
-		
-		// 更新所有子节点状态
-		for (int i = 0; i < m_iChildCount; i++) {
-			m_pChildren[i]->Update();
-		}
-	}
 	
-	// 渲染节点
-	void Render() {
-		// 渲染自身
-		DrawSelf();
-		// 渲染所有子节点
-		for (int i = 0; i < m_iChildCount; i++) {
-			m_pChildren[i]->Render();
-		}
-	}
-	
-	// 绘制自身（虚函数，由子类实现）
-	virtual void DrawSelf() = 0;
-};
+	};
 
-// 定义一个继承自Node的子类，实现DrawSelf方法
-class Button : public Node {
-private:
-	// 按钮颜色
-	Color m_cColor;
-	// 按钮文字
-	const char* m_sText;
 	
-public:
-	// 构造函数
-	Button(Color cColor, const char* sText) {
-		m_cColor = cColor;
-		m_sText = sText;
-	}
-	
-	// 绘制自身
-	void DrawSelf() override {
-		// 获取节点位置和锚点
-		Vector2 vPosition = GetPosition();
-		Vector2 mSize = GetSize();
-		//Vector2 vAnchor = GetAnchor();
-		// 绘制一个矩形作为按钮背景
-		DrawRectangle(vPosition.x,vPosition.y,mSize.x,mSize.y,m_cColor);//需要宽度和高度
-		// 绘制按钮文字
-		DrawText(m_sText, GetScreenWidth() / 2 - MeasureText(m_sText, 20) / 2, GetScreenHeight() / 2 - 10, 20, BLACK);
+	void draw() {
+		DrawRectangle(size.x, size.y, size.width, size.height, m_color);
+		for (size_t i = 0; i < children_list.size(); i++) {
+			children_list[i]->draw();
+		}
 	}
 };
 
-// 定义一个回调函数，用于打印鼠标点击事件
-void OnClick() {
-	std::cout<<"asdasdasdasd";
-	printf("You clicked the button!\n");
-}
 
-void OnClick1() {
-	std::cout<<"123123123";
-	printf("You 123123123ton!\n");
-}
-
-// 在主函数中创建一个Button对象，并添加鼠标事件监听器
-int main() {
-	// 初始化窗口和绘图环境
-	InitWindow(800, 600, "Example");
+int main(void)
+{
+	const int screenWidth = 800;
+	const int screenHeight = 450;
+	InitWindow(screenWidth, screenHeight, "raylib [textures] example - sprite explosion");
+	InitAudioDevice();
 	SetTargetFPS(60);
-	
-	// 创建一个Button对象，设置位置、锚点和颜色等属性
-	Button* pButton = new Button(LIGHTGRAY, "Click Me");
-	Button* b2 = new Button(BLACK, "bt");
-	b2->SetSize(100,50);
-	b2->AddEventListener(&OnClick1);
-	b2->SetPosition({120.0f,120.0f});
-	b2->SetMouseBlock(false);
-	
-	pButton->AddChild(b2);
-	pButton->SetSize(100,100);
-	pButton->SetPosition({100.0f, 100.0f});
-	//pButton->SetAnchor({200.0f, 100.0f});
-	pButton->SetMouseBlock(true);
-	// 添加鼠标事件监听器，传入回调函数的指针
-	pButton->AddEventListener(&OnClick);
-	
-	// 主循环
-	while (!WindowShouldClose()) {
-		// 更新节点状态
-		pButton->Update();
-		
-		// 开始绘制
+	SetTraceLogLevel(LOG_WARNING);	
+	事件穿透记录参数 m_event;
+	m_event.数组当前行 = 1;
+	node* root = new node(50, 50);
+	root->set_color(BLUE);
+	// 创建一些子节点
+	node* node1 = new node(100, 50);
+	node1->set_color(GREEN);
+	root->addchild(node1);
+	node* node2 = new node(70, 100);
+	node2->set_color(RED);
+	root->addchild(node2);
+	node1->name = "node1";
+	node2->name = "node2";
+	node* node3 = new node(120
+		,120);
+	node3->set_color(BLACK);
+	node3->name = "node3";
+	node2->addchild(node3);
+	node2->是否穿透 = false;
+	node1->是否穿透 = false;
+	node3->size.width = 70;
+	node3->size.height = 70;
+	node3->是否穿透 = false;
+	root->name = "root";
+
+	while (!WindowShouldClose())
+	{
+		root->event(m_event);
+		m_event.数组当前行=1;
+
+		m_event.是否到达最上层节点 = false;
 		BeginDrawing();
 		ClearBackground(RAYWHITE);
-		
-		// 渲染节点
-		pButton->Render();
-		
-		// 结束绘制
+		root->draw();
+		DrawText("Click to explode!", 440, 400, 40, DARKGRAY);
 		EndDrawing();
+		//----------------------------------------------------------------------------------
 	}
-	
-	// 释放资源和关闭窗口
-	delete pButton;
+	CloseAudioDevice();
 	CloseWindow();
-	
 	return 0;
 }
-	
