@@ -1,10 +1,4 @@
-#include "ClientSocket.h"
-
-//client_socket::client_socket() : m_socket(INVALID_SOCKET), m_connected(false), m_receive_thread_handle(NULL), m_receive_thread_id(0), m_async_receiving(false), m_receive_callback(NULL) {
-//	if (WSAStartup(MAKEWORD(2, 2), &m_wsa_data) != 0) {
-//		std::cerr << "WSAStartup failed" << std::endl;
-//	}
-//}
+#include "client_socket.h"
 
 client_socket::client_socket() : m_socket(INVALID_SOCKET), m_connected(false), m_receive_thread_handle(NULL), m_receive_thread_id(0), m_async_receiving(false), m_receive_callback(NULL) {
 	if (WSAStartup(MAKEWORD(2, 2), &m_wsa_data) != 0) {
@@ -20,11 +14,6 @@ client_socket::~client_socket() {
 	delete[] m_receive_buffer.buf;
 	WSACleanup();
 }
-
-//client_socket::~client_socket() {
-//	close();
-//	WSACleanup();
-//}
 
 client_socket& client_socket::instance() {
 	static client_socket s_instance;
@@ -131,8 +120,10 @@ void client_socket::async_receive_callback(DWORD error, DWORD bytes_transferred,
 	client_socket* pThis = reinterpret_cast<client_socket*>(overlapped->hEvent);
 	if (error == 0 && bytes_transferred > 0) {
 		if (pThis->m_receive_callback) {
-			pThis->m_receive_callback(pThis->m_receive_buffer, bytes_transferred);
+			char* receive_buffer = reinterpret_cast<char*>(pThis->m_receive_buffer.buf);
+			pThis->m_receive_callback(receive_buffer, bytes_transferred);
 		}
+
 		DWORD bytes_received = 0;
 		WSARecv(pThis->m_socket, &pThis->m_receive_buffer, 1, &bytes_received, &flags, &pThis->m_receive_overlapped, async_receive_callback);
 	}
